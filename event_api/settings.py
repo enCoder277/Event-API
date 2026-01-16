@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'rest_framework',
+    'drf_spectacular',
     'events.apps.EventsConfig',
 ]
 
@@ -51,11 +52,34 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
+    #drf_spectacular
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=6),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+}
+
+SPECTACULAR_SETTINGS = {   #
+    'TITLE': 'Event API',
+    'DESCRIPTION': 'API for managing events (Event API)',
+    'VERSION': '1.0.0',
+    'CONTACT': {
+        'name': 'Ruslan',
+        # 'email': 'you@example.com'
+    },
+    # показать JWT Bearer auth в Swagger:
+    'COMPONENTS': {
+        'securitySchemes': {
+            'bearerAuth': {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+            }
+        }
+    },
+    'SECURITY': [{'bearerAuth': []}],
 }
 
 MIDDLEWARE = [
@@ -93,10 +117,15 @@ WSGI_APPLICATION = 'event_api.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'postgres',
+        'USER': 'postgres',
+        'PASSWORD': 'postgres', #не указывал
+        'HOST': 'localhost',  # имя сервиса в docker-compose
+        'PORT': '5432',
     }
 }
+
 
 
 # Password validation
