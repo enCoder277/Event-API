@@ -2,49 +2,38 @@ from django.contrib.auth import get_user_model
 from rest_framework import viewsets, generics, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters as drf_filters
 
 from .models import Event, EventRegistration
-from .serializers import (
-    EventSerializer,
-    EventCreateUpdateSerializer,
-    EventRegistrationSerializer,
-    EventRegistrationCreateSerializer,
-    # добавим UserSerializer ниже
-)
+from .serializers import (EventSerializer, EventCreateUpdateSerializer, EventRegistrationSerializer, EventRegistrationCreateSerializer,)
 from .permissions import IsOrganizerOrReadOnly
+from .filters import EventFilter
+
 
 User = get_user_model()
 
-
 class EventViewSet(viewsets.ModelViewSet):
-    """
-    CRUD для Event.
-    - list/retrieve доступны всем (или read-only).
-    - create/update/delete — только для аутентифицированных.
-    - Только организатор может изменять/удалять конкретное событие.
-    """
     queryset = Event.objects.all().order_by('-date')
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOrganizerOrReadOnly]
-    serializer_class = EventSerializer  # default
+    serializer_class = EventSerializer
+
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_class = EventFilter
+    search_fields = ['title', 'description', 'location', 'organizer__username']
+    ordering_fields = ['date', 'created_at', 'title']
 
     def get_serializer_class(self):
-        # Для создания/обновления используем более узкий сериализатор
         if self.action in ('create', 'update', 'partial_update'):
             return EventCreateUpdateSerializer
         return EventSerializer
 
     def perform_create(self, serializer):
-        # Организатор ставится автоматически
         serializer.save(organizer=self.request.user)
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def register(self, request, pk=None):
-        """
-        POST /api/events/{pk}/register/
-        Регистрирует request.user на событие.
-        """
         event = self.get_object()
-        # используем специальный сериализатор валидации
         serializer = EventRegistrationCreateSerializer(
             data=request.data,
             context={'request': request, 'event': event}
@@ -62,15 +51,10 @@ class EventViewSet(viewsets.ModelViewSet):
             )
 
         out = EventRegistrationSerializer(registration)
-        # (опционально) тут можно отправить email уведомление
         return Response(out.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['delete'], permission_classes=[permissions.IsAuthenticated])
     def unregister(self, request, pk=None):
-        """
-        DELETE /api/events/{pk}/unregister/
-        Удаляет регистрацию текущего пользователя на событие.
-        """
         event = self.get_object()
         registration = EventRegistration.objects.filter(user=request.user, event=event).first()
         if not registration:
@@ -80,16 +64,11 @@ class EventViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
     def my_registrations(self, request):
-        """
-        GET /api/events/my_registrations/
-        Список событий, на которые зарегистрирован текущий пользователь.
-        """
         regs = EventRegistration.objects.filter(user=request.user).select_related('event')
         serializer = EventRegistrationSerializer(regs, many=True)
         return Response(serializer.data)
 
 
-# --- User registration API (simple) ---
 from rest_framework import serializers
 
 class UserCreateSerializer(serializers.ModelSerializer):
@@ -109,9 +88,5 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
 
 class RegisterAPIView(generics.CreateAPIView):
-    """
-    POST /api/auth/register/
-    Создать нового пользователя (simple).
-    """
     serializer_class = UserCreateSerializer
     permission_classes = [permissions.AllowAny]
